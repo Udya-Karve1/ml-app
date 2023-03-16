@@ -48,9 +48,6 @@ public class MLService {
     private StorageService storageService;
 
     @Autowired
-    private DatabaseService databaseService;
-
-    @Autowired
     private CacheManagement cacheManagement;
 
 
@@ -66,7 +63,7 @@ public class MLService {
 
 
 
-    public String uploadCSV(MultipartFile file, String tableName) throws Exception {
+    public String uploadCSV(MultipartFile file) throws Exception {
 
         String uploadedFileName = storageService.getFileNameToUpload(file);
 
@@ -75,33 +72,9 @@ public class MLService {
         log.info("ActionPlan_File_url: {}", uploadedFileName);
 
         Resource resource = loadFileAsResource(uploadedFileName, Constants.CSV);
-        //processCsvFile(resource.getInputStream() , tableName);
 
         return cacheManagement.createUserSession(resource.getFile().getAbsolutePath()).getSessionId();
     }
-
-
-/*
-    private void processCsvFile(InputStream in, String tableName) throws BaseException {
-        try {
-            ObjectMapper mapper = new ObjectMapper();
-            CsvService csvService = new CsvService(null, in);
-            String jsonObject = csvService.getStringFormatValues();
-            String dataTypes = csvService.geDataTypes();
-            List<Map<String, Object>> values = csvService.getCSVValues();
-
-            databaseService.createTable(tableName, mapper.readValue(dataTypes, new TypeReference<List<Map<String, String>>>() {}));
-            databaseService.insertData(tableName, values);
-            log.debug("DataTypes: {}", dataTypes);
-
-
-        } catch (IOException | CsvException e) {
-            throw new BaseException(400, e.getMessage(), e);
-        }
-    }
-
-*/
-
 
 
     public Double toDoubleValue(String variableName, Map<String, String> typeMap, Object objValue) {
@@ -123,36 +96,8 @@ public class MLService {
         return Double.valueOf(byteVal.toString());
     }
 
-    private Map<String, String> prepareTypeMap(Map<String, Object> mapVal) {
-        Map<String, String> mapType = new HashMap<>();
-        Iterator<String> it = mapVal.keySet().iterator();
-
-        while (it.hasNext()) {
-            String val = it.next();
-            if (mapVal.get(val) instanceof Byte) {
-                mapType.put(val, Constants.BYTE);
-            } else if (mapVal.get(val) instanceof Short) {
-                mapType.put(val, Constants.SHORT);
-            } else if (mapVal.get(val) instanceof Integer) {
-                mapType.put(val, Constants.INTEGER);
-            } else if (mapVal.get(val) instanceof Long) {
-                mapType.put(val, Constants.LONG);
-            } else if (mapVal.get(val) instanceof BigInteger) {
-                mapType.put(val, Constants.BIG_INTEGER);
-            } else {
-                mapType.put(val, "Double");
-            }
-        }
-        return mapType;
-    }
-
 
     public void prepareLinearRegressionModel() throws Exception {
-
-
-
-
-
 
         ConverterUtils.DataSource source = new ConverterUtils.DataSource("E:\\file-upload\\csv\\insurance.arff");
         Instances dataset = source.getDataSet();
@@ -162,14 +107,10 @@ public class MLService {
         LinearRegression model = new LinearRegression();
         model.buildClassifier(dataset);
 
-
-
         log.info("LR formula: {}", model);
         log.info("LR formula coefficients: {}", model.coefficients());
         Instance myhouse = dataset.lastInstance();
         double price = model.classifyInstance(myhouse);
-        System.out.println("-------------------------");
-        System.out.println("PRECTING THE PRICE : "+price);
 
     }
 
@@ -246,7 +187,7 @@ public class MLService {
 
 
 
-    public List<AttributeStatistic> getAttributeStat(String sessionId) throws Exception {
+    public List<AttributeStatistic> getAttributeStat(String sessionId)  {
         Instances dataset = cacheManagement.getDatasource(sessionId);
 
         if(dataset.classIndex() == -1) {

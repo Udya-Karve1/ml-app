@@ -4,13 +4,9 @@ import com.sk.rk.services.sl.linear.Anova;
 import com.sk.rk.services.sl.linear.RegressionCSTP;
 import com.sk.rk.services.sl.linear.RegressionConstants;
 import com.sk.rk.services.sl.linear.RegressionModel;
-import org.apache.commons.math3.distribution.LogisticDistribution;
 import org.apache.commons.math3.distribution.TDistribution;
 import org.apache.commons.math3.stat.regression.OLSMultipleLinearRegression;
 import org.apache.commons.math3.util.FastMath;
-import weka.classifiers.bayes.NaiveBayes;
-import weka.classifiers.functions.Logistic;
-import weka.classifiers.trees.RandomForest;
 
 import java.util.ArrayList;
 import java.util.HashMap;

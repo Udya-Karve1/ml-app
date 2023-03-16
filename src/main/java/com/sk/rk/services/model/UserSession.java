@@ -1,7 +1,6 @@
 package com.sk.rk.services.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import lombok.Data;
 import org.apache.commons.lang3.StringUtils;
 import weka.core.Instances;
 

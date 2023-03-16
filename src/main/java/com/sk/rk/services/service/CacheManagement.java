@@ -12,7 +12,7 @@ import java.util.Map;
 public class CacheManagement {
 
 
-    public static Map<String, UserSession> cacheMap = new HashMap<>();
+    protected static final Map<String, UserSession> cacheMap = new HashMap<>();
 
     public UserSession createUserSession(String filePath) throws Exception {
         UserSession userSession = new UserSession(filePath);

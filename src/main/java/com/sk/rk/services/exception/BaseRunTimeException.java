@@ -5,11 +5,13 @@ import lombok.Data;
 @Data
 public class BaseRunTimeException extends RuntimeException {
 
-    private int errorCode;
-    private String errorMessage;
+    private final int errorCode;
+    private final String errorMessage;
 
     public BaseRunTimeException(String message) {
         super(message);
+        this.errorCode = 400;
+        this.errorMessage = message;
     }
 
     public BaseRunTimeException(int errorCode, String errorMessage) {

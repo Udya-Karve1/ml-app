@@ -1,13 +1,15 @@
 package com.sk.rk.services.exception;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class BaseValidationException extends RuntimeException {
 
-    private List<String> messages;
+    private final List<String> messages;
 
     public BaseValidationException() {
         super();
+        this.messages = new ArrayList<>();
     }
 
     public BaseValidationException(List<String> messages) {

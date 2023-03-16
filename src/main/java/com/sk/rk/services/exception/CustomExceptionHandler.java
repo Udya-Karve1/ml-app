@@ -2,19 +2,16 @@ package com.sk.rk.services.exception;
 
 
 import com.sk.rk.services.model.ErrorResponse;
-import com.sk.rk.services.utils.CommonUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 import java.io.PrintWriter;
@@ -34,32 +31,6 @@ public class CustomExceptionHandler extends ResponseEntityExceptionHandler {
 
 
     private static final String EXCEPTION = "Exception: ";
-
-    protected ResponseEntity<Object> handleExceptionInternal(Exception exception, Object body,
-                                                             HttpHeaders headers, HttpStatus status, WebRequest request) {
-
-        logger.error(EXCEPTION, exception);
-        if (HttpStatus.INTERNAL_SERVER_ERROR.equals(status)) {
-            request.setAttribute("javax.servlet.error.exception", exception, 0);
-        }
-
-        ErrorResponse error = prepareErrorResponse(exception,
-                HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                Collections.singletonList(exception.getMessage()), CommonUtils.getCurrentRequest());
-        error.setIsSuccess(false);
-
-        if (exception instanceof MethodArgumentNotValidException) {
-            error.setUserMessage(populateFieldErrorMessages((MethodArgumentNotValidException)exception));
-        } else {
-
-            error.setUserMessage(
-                    Collections.singletonList(exception.getMessage())
-            );
-        }
-
-
-        return new ResponseEntity<>(error, headers, status);
-    }
 
     @ExceptionHandler(value = {ConstraintViolationException.class})
     protected ResponseEntity<ErrorResponse> handleFieldValidationExceptions (ConstraintViolationException ex, HttpServletRequest request, HttpServletResponse response) {
@@ -106,10 +77,6 @@ public class CustomExceptionHandler extends ResponseEntityExceptionHandler {
             errors.add(exception.getMessage());
         }
 
-
-
-        HttpStatus httpStatus;
-
         switch (exception.getErrorCode()) {
             case 400:
                 return new ResponseEntity<>(prepareErrorResponse(exception, 400, errors, request), HttpStatus.BAD_REQUEST);
@@ -133,8 +100,6 @@ public class CustomExceptionHandler extends ResponseEntityExceptionHandler {
         if (errors.isEmpty()){
             errors.add(exception.getMessage());
         }
-
-        HttpStatus httpStatus;
 
         switch (exception.getErrorCode()) {
             case 400:
