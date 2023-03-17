@@ -43,4 +43,15 @@ public class CacheManagement {
         ConverterUtils.DataSource source = new ConverterUtils.DataSource(filePath);
         return source.getDataSet();
     }
+
+    public Instances getTrainDataset(String sessionId) {
+        UserSession session = getUserSession(sessionId);
+        return session.getTrainDataset();
+    }
+
+    public Instances getTestDataset(String sessionId) {
+        UserSession session = getUserSession(sessionId);
+        return session.getTestDataset();
+    }
+
 }

@@ -14,16 +14,16 @@ import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import weka.attributeSelection.CfsSubsetEval;
+import weka.attributeSelection.ClassifierAttributeEval;
 import weka.attributeSelection.GreedyStepwise;
+import weka.attributeSelection.Ranker;
 import weka.classifiers.Evaluation;
 import weka.classifiers.bayes.NaiveBayes;
 import weka.classifiers.functions.LinearRegression;
+import weka.classifiers.functions.Logistic;
 import weka.classifiers.functions.SMOreg;
 import weka.classifiers.trees.J48;
-import weka.core.Attribute;
-import weka.core.AttributeStats;
-import weka.core.Instance;
-import weka.core.Instances;
+import weka.core.*;
 import weka.core.converters.ArffSaver;
 import weka.core.converters.CSVLoader;
 import weka.core.converters.ConverterUtils;
@@ -39,6 +39,9 @@ import java.math.BigInteger;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -63,7 +66,7 @@ public class MLService {
 
 
 
-    public String uploadCSV(MultipartFile file) throws Exception {
+    public UserSession uploadCSV(MultipartFile file) throws Exception {
 
         String uploadedFileName = storageService.getFileNameToUpload(file);
 
@@ -73,7 +76,7 @@ public class MLService {
 
         Resource resource = loadFileAsResource(uploadedFileName, Constants.CSV);
 
-        return cacheManagement.createUserSession(resource.getFile().getAbsolutePath()).getSessionId();
+        return cacheManagement.createUserSession(resource.getFile().getAbsolutePath());
     }
 
 
@@ -186,6 +189,43 @@ public class MLService {
     }
 
 
+    public ConcurrentMap<?, Integer> getUniqueValuesWithCount(String sessionId, String fieldName) {
+        Instances dataset = cacheManagement.getDatasource(sessionId);
+        Attribute attribute = dataset.attribute(fieldName);
+
+        if(attribute==null) {
+            throw new BaseRunTimeException(400, "Attribute " + fieldName + " not found.");
+        }
+
+        if(attribute.isNumeric()) {
+            final ConcurrentMap<Double, Integer> distinctMap = new ConcurrentHashMap();
+            for(int i = 0;i< dataset.size(); i++) {
+                double doubleValue = dataset.get(i).value(attribute.index());
+                Integer valueFromMap = distinctMap.get(doubleValue);
+                if(valueFromMap==null) {
+                    valueFromMap = 0;
+                }
+                ++valueFromMap;
+
+                distinctMap.put(doubleValue, valueFromMap);
+            }
+
+            return distinctMap;
+        } else {
+            final ConcurrentMap<String, Integer> distinctMap = new ConcurrentHashMap();
+            for(int i = 0;i< dataset.size(); i++) {
+                String doubleValue = dataset.get(i).stringValue(attribute.index());
+                Integer valueFromMap = distinctMap.get(doubleValue);
+                if(valueFromMap==null) {
+                    valueFromMap = 0;
+                }
+                ++valueFromMap;
+
+                distinctMap.put(doubleValue, valueFromMap);
+            }
+            return distinctMap;
+        }
+    }
 
     public List<AttributeStatistic> getAttributeStat(String sessionId)  {
         Instances dataset = cacheManagement.getDatasource(sessionId);
@@ -232,22 +272,51 @@ public class MLService {
     private void performLinearRegression(String sessionId) {
         Instances dataset = cacheManagement.getDatasource(sessionId);
         dataset.setClassIndex(dataset.numAttributes() - 1);
-
     }
 
-    private void performDecisionTreeJ48(String sessionId) throws Exception {
-        Instances dataset = cacheManagement.getDatasource(sessionId);
-        dataset.setClassIndex(dataset.numAttributes() - 1);
+    private int getClassIndex(Instances dataset, String name) {
+        return dataset.attribute(name).index();
+    }
 
-        J48 tree = new J48();
+    private ClassificationResponse performLogistic(String sessionId, Request request) throws Exception {
+        Instances dataset = cacheManagement.getTrainDataset(sessionId);
+        dataset.setClassIndex(getClassIndex(dataset, request.getYColumn()));
+
+        Ranker ranker = new Ranker();
+
+        Logistic logistic = new Logistic();
+        logistic.buildClassifier(dataset);
+
+
+
         Evaluation evaluation = new Evaluation(dataset);
 
-        ConverterUtils.DataSource dataSourceTest = new ConverterUtils.DataSource("");
-        Instances testDataset = dataSourceTest.getDataSet();
-        testDataset.setClassIndex(testDataset.numAttributes() - 1);
+        AttributeSelection attributeSelection = new AttributeSelection();
+
+
+
+        Instances testDataset = cacheManagement.getTestDataset(sessionId);
+        testDataset.setClassIndex(getClassIndex(testDataset, request.getYColumn()));
+        evaluation.evaluateModel(logistic, testDataset);
+
+        return buildClassificationResponse(evaluation);
+    }
+
+    private ClassificationResponse performDecisionTreeJ48(String sessionId, Request request) throws Exception {
+        Instances dataset = cacheManagement.getTrainDataset(sessionId);
+        dataset.setClassIndex(getClassIndex(dataset, request.getYColumn()));
+
+        J48 tree = new J48();
+        tree.buildClassifier(dataset);
+        Evaluation evaluation = new Evaluation(dataset);
+
+        Instances testDataset = cacheManagement.getTestDataset(sessionId);
+        testDataset.setClassIndex(getClassIndex(testDataset, request.getYColumn()));
         evaluation.evaluateModel(tree, testDataset);
 
-        log.info(evaluation.toSummaryString("Evaluation result:\n", false));
+        return buildClassificationResponse(evaluation);
+
+/*        log.info(evaluation.toSummaryString("Evaluation result:\n", false));
         log.info("PCF Correct: {}", evaluation.pctCorrect());
         log.info("PCT Incorrect: {}", evaluation.pctIncorrect());
         log.info("Area under ROC: {}", evaluation.areaUnderROC(1));
@@ -261,33 +330,80 @@ public class MLService {
         log.info("fMeasure: {}", evaluation.fMeasure(1));
         log.info("Error Rate: {}", evaluation.errorRate());
         log.info(evaluation.toMatrixString("==== Overall Confusion Matrix ====\n "));
+        return evaluation.toSummaryString();*/
     }
 
-    private void performNaiveBayesClassification(String sessionId) throws Exception {
-        Instances dataset = cacheManagement.getDatasource(sessionId);
-        dataset.setClassIndex(dataset.numAttributes() - 1);
+    private ClassificationResponse performNaiveBayesClassification(String sessionId, Request request) throws Exception {
+        Instances trainDataset = cacheManagement.getTrainDataset(sessionId);
+        Attribute classAttribute = trainDataset.attribute(request.getYColumn());
+
+        trainDataset.setClassIndex(getClassIndex(trainDataset, request.getYColumn()));
         NaiveBayes naiveBayes = new NaiveBayes();
-        naiveBayes.buildClassifier(dataset);
+        naiveBayes.buildClassifier(trainDataset);
 
-        log.info("naiveBayes.getCapabilities(): {}", naiveBayes.getCapabilities());
+        Instances testDataset = cacheManagement.getTestDataset(sessionId);
+        testDataset.setClassIndex(getClassIndex(testDataset, request.getYColumn()));
+        Evaluation evaluation = new Evaluation(trainDataset);
+        evaluation.evaluateModel(naiveBayes, cacheManagement.getTestDataset(sessionId));
+
+        return buildClassificationResponse(evaluation);
     }
 
 
-    public void doClassification(String sessionId, Request request) throws Exception {
-        performNaiveBayesClassification(sessionId);
-    }
+    public ClassificationResponse doClassification(String sessionId, Request request) throws Exception {
+        prepareTrainTestDataset(request, sessionId);
+        switch (request.getRegressionType()) {
+            case "NaiveByes":
+                return performNaiveBayesClassification(sessionId, request);
+            case "Tree":
+                return performDecisionTreeJ48(sessionId, request);
+            case "Logistic":
+                return performLogistic(sessionId, request);
 
-    private Instances preProcessData(Request request, Instances dataset) {
-        PreProcessData data = new PreProcessData();
-        int totalSize = dataset.size();
-        int totalTrainData = Math.round((request.getTrainDataSize()*100)/totalSize);
-
-        Instances instances = new Instances(dataset);
-
-        for(int i=totalSize; i>totalTrainData; i--) {
-            instances.delete(i);
+            default:
+                throw new BaseRunTimeException(400, "Specified algorithm " + request.getRegressionType() + " not found.");
         }
+    }
 
-        return instances;
+    private void prepareTrainTestDataset(Request request, String sessionId) {
+        UserSession userSession = cacheManagement.getUserSession(sessionId);
+        Instances dataset = userSession.getDateset();
+
+        int trainDateRecords = Math.round ((dataset.size() * request.getTrainDataSize())/100);
+
+        userSession.setTrainDataset(new Instances(dataset, 0, trainDateRecords));
+        userSession.setTestDataset(new Instances(dataset, trainDateRecords, (dataset.size()-trainDateRecords -1)));
+    }
+
+    private ClassificationResponse buildClassificationResponse(Evaluation evaluation) throws Exception {
+
+        return ClassificationResponse.builder()
+                .areaUnderRoc(evaluation.areaUnderROC(1))
+                .PctCorrect(evaluation.pctCorrect())
+                .PctIncorrect(evaluation.pctIncorrect())
+                .kappa(evaluation.kappa())
+                .meanAbsoluteError(evaluation.meanAbsoluteError())
+                .rootMeanPeriodSquaredError(evaluation.rootMeanPriorSquaredError())
+                .relativeAbsoluteError(evaluation.relativeAbsoluteError())
+                .precision(evaluation.precision(1))
+                .fmeasure(evaluation.fMeasure(1))
+                .errorRate(evaluation.errorRate())
+                .confusionMatrix(evaluation.confusionMatrix())
+                .build();
+
+    }
+
+    public RegressionResponse doRegression(String sessionId, Request request) throws Exception {
+        prepareTrainTestDataset(request, sessionId);
+        Instances trainDataset = cacheManagement.getTrainDataset(sessionId);
+        Attribute classAttribute = trainDataset.attribute(request.getYColumn());
+        trainDataset.setClassIndex(getClassIndex(trainDataset, request.getYColumn()));
+
+        LinearRegression regression = new LinearRegression();
+        regression.buildClassifier(trainDataset);
+
+
+        return RegressionResponse.builder().message("testing message").build();
+
     }
 }

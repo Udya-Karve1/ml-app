@@ -11,12 +11,18 @@ public class UserSession {
     private String originalDataSetFilePath;
     private String dataSetFilePath;
 
+    @JsonIgnore
     private Instances dateset;
 
     @JsonIgnore
     private long lastReferred;
 
-    private PreProcessData preProcessData;
+
+    private Instances trainDataset;
+    private Instances testDataset;
+
+
+
     public UserSession(String dataSetFilePath) {
         this.originalDataSetFilePath = dataSetFilePath;
         this.sessionId = UUID.randomUUID().toString();
@@ -62,11 +68,19 @@ public class UserSession {
         this.dateset = dateset;
     }
 
-    public PreProcessData getPreProcessData() {
-        return preProcessData;
+    public Instances getTrainDataset() {
+        return trainDataset;
     }
 
-    public void setPreProcessData(PreProcessData preProcessData) {
-        this.preProcessData = preProcessData;
+    public void setTrainDataset(Instances trainDataset) {
+        this.trainDataset = trainDataset;
+    }
+
+    public Instances getTestDataset() {
+        return testDataset;
+    }
+
+    public void setTestDataset(Instances testDataset) {
+        this.testDataset = testDataset;
     }
 }

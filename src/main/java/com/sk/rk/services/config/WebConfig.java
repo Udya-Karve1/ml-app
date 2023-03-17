@@ -1,5 +1,6 @@
 package com.sk.rk.services.config;
 
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.MediaType;
 import org.springframework.http.converter.HttpMessageConverter;
@@ -14,7 +15,9 @@ import java.util.Collections;
 import java.util.List;
 
 @Configuration
-public class WebConfig implements WebMvcConfigurer {
+public class
+WebConfig implements WebMvcConfigurer {
+
     @Override
     public void configureMessageConverters (List<HttpMessageConverter<?>> converters) {
         SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
@@ -22,7 +25,7 @@ public class WebConfig implements WebMvcConfigurer {
         builder.indentOutput(true).dateFormat(formatter);
         MappingJackson2HttpMessageConverter converter = new MappingJackson2HttpMessageConverter();
 
-        converters.clear();
+        //converters.clear();
 
         converter.setSupportedMediaTypes(Collections.singletonList(MediaType.ALL));
         converters.add(new MappingJackson2HttpMessageConverter());
