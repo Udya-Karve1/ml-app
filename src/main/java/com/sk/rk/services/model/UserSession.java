@@ -4,15 +4,19 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import org.apache.commons.lang3.StringUtils;
 import weka.core.Instances;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 public class UserSession {
     private String sessionId;
     private String originalDataSetFilePath;
     private String dataSetFilePath;
+    private String fileName;
+    private String uploadedFileName;
 
     @JsonIgnore
-    private Instances dateset;
+    private Instances dataset;
 
     @JsonIgnore
     private long lastReferred;
@@ -21,11 +25,13 @@ public class UserSession {
     private Instances trainDataset;
     private Instances testDataset;
 
+    private Map<String, Map> nominalValueMap = new HashMap<>();
+
 
 
     public UserSession(String dataSetFilePath) {
         this.originalDataSetFilePath = dataSetFilePath;
-        this.sessionId = UUID.randomUUID().toString();
+        this.sessionId = UUID.randomUUID().toString().toUpperCase();
         this.lastReferred = System.currentTimeMillis();
     }
 
@@ -60,14 +66,6 @@ public class UserSession {
         this.lastReferred = lastReferred;
     }
 
-    public Instances getDateset() {
-        return dateset;
-    }
-
-    public void setDateset(Instances dateset) {
-        this.dateset = dateset;
-    }
-
     public Instances getTrainDataset() {
         return trainDataset;
     }
@@ -82,5 +80,36 @@ public class UserSession {
 
     public void setTestDataset(Instances testDataset) {
         this.testDataset = testDataset;
+    }
+
+    public Map<String, Map> getNominalValueMap() {
+        return nominalValueMap;
+    }
+    public void setNominalValueMap(Map<String, Map> nominalValueMap) {
+        this.nominalValueMap = nominalValueMap;
+    }
+
+    public Instances getDataset() {
+        return dataset;
+    }
+
+    public void setDataset(Instances dataset) {
+        this.dataset = dataset;
+    }
+
+    public String getFileName() {
+        return fileName;
+    }
+
+    public void setFileName(String fileName) {
+        this.fileName = fileName;
+    }
+
+    public String getUploadedFileName() {
+        return uploadedFileName;
+    }
+
+    public void setUploadedFileName(String uploadedFileName) {
+        this.uploadedFileName = uploadedFileName;
     }
 }

@@ -6,6 +6,7 @@ import weka.core.Instances;
 import weka.core.converters.ConverterUtils;
 
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
 @Service
@@ -14,9 +15,19 @@ public class CacheManagement {
 
     protected static final Map<String, UserSession> cacheMap = new HashMap<>();
 
+    public UserSession createUserSession(String filePath, String fileName, String uploadedFileName) throws Exception {
+        UserSession userSession = new UserSession(filePath);
+        userSession.setDataset(prepareDatasource(filePath));
+        userSession.setFileName(fileName);
+        userSession.setUploadedFileName(uploadedFileName);
+        cacheMap.put(userSession.getSessionId(), userSession);
+
+        return userSession;
+    }
+
     public UserSession createUserSession(String filePath) throws Exception {
         UserSession userSession = new UserSession(filePath);
-        userSession.setDateset(prepareDatasource(filePath));
+        userSession.setDataset(prepareDatasource(filePath));
         cacheMap.put(userSession.getSessionId(), userSession);
 
         return userSession;
@@ -32,11 +43,11 @@ public class CacheManagement {
     }
 
     public String getFileNameBySessionId(String sessionId) {
-        return getUserSession(sessionId).getDataSetFilePath();
+        return getUserSession(sessionId.toString()).getDataSetFilePath();
     }
 
     public Instances getDatasource(String sessionId) {
-        return getUserSession(sessionId).getDateset();
+        return getUserSession(sessionId).getDataset();
     }
 
     private Instances prepareDatasource(String filePath) throws Exception {

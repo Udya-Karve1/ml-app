@@ -19,6 +19,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 public class LocalFileService implements StorageService {
@@ -63,6 +64,7 @@ public class LocalFileService implements StorageService {
         String fileName = getFileNameToUpload(file);
         Path fileStorageLocation = fileStorageLocationMap.get(category);
         Path targetLocation = fileStorageLocation.resolve(fileName);
+
 
         if (!targetLocation.toFile().exists()) {
             Files.createDirectories(targetLocation);

@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import weka.core.Instance;
 
 import java.util.Collections;
 import java.util.List;
@@ -19,7 +20,7 @@ import java.util.concurrent.ConcurrentMap;
 
 
 @RestController
-@RequestMapping("/v1/supervised")
+@RequestMapping("/v1/ml-api")
 public class SupervisedController {
 
     @Autowired
@@ -82,4 +83,86 @@ public class SupervisedController {
         mlService.getUniqueValuesWithCount(sessionId, fieldName);
         return new ResponseEntity<>(mlService.getUniqueValuesWithCount(sessionId, fieldName), HttpStatus.OK);
     }
+
+    @GetMapping("/missing-values")
+    @Operation(summary = "Get dataset stats", parameters = {
+            @Parameter(name = Constants.USER_SESSION, in = ParameterIn.HEADER)
+    })
+    public ResponseEntity<Map<String, AttributeStatistic>> getMissingValues(
+            @RequestHeader(value = Constants.USER_SESSION) String sessionId
+    ) throws Exception {
+        return new ResponseEntity<>(mlService.getMissingValues(sessionId), HttpStatus.OK);
+    }
+
+    @GetMapping("/top/{no}")
+    @Operation(summary = "Get dataset stats", parameters = {
+            @Parameter(name = Constants.USER_SESSION, in = ParameterIn.HEADER)
+    })
+    public ResponseEntity<List<Map>> getTopRec(
+            @RequestHeader(value = Constants.USER_SESSION) String sessionId
+            , @PathVariable("no") Integer no
+    ) throws Exception {
+        return new ResponseEntity<>(mlService.getTopRecs(sessionId, no), HttpStatus.OK);
+    }
+
+    @GetMapping("/trail/{no}")
+    @Operation(summary = "Get dataset stats", parameters = {
+            @Parameter(name = Constants.USER_SESSION, in = ParameterIn.HEADER)
+    })
+    public ResponseEntity<List<Instance>> getTrailRec(
+            @RequestHeader(value = Constants.USER_SESSION) String sessionId
+            , @PathVariable("no") Integer no
+    ) throws Exception {
+        return new ResponseEntity<>(mlService.getTrailRecs(sessionId, no), HttpStatus.OK);
+    }
+
+    @PatchMapping("/add-attribute/{attribute-name}")
+    @Operation(summary = "Add attribute to dataset", parameters = {
+            @Parameter(name = Constants.USER_SESSION, in = ParameterIn.HEADER)
+    })
+    public ResponseEntity<String> addAttribute(
+            @RequestHeader(value = Constants.USER_SESSION) String sessionId
+            , @PathVariable("attribute-name") String name
+    ) throws Exception {
+        mlService.addAttribute(sessionId, name);
+        return new ResponseEntity<>("Attribute added.", HttpStatus.OK);
+    }
+
+    @PutMapping("/handle-nominal/{attribute-name}")
+    @Operation(summary = "Add attribute to dataset", parameters = {
+            @Parameter(name = Constants.USER_SESSION, in = ParameterIn.HEADER)
+    })
+    public ResponseEntity<String> handleNominal(
+            @RequestHeader(value = Constants.USER_SESSION) String sessionId
+            , @PathVariable("attribute-name") String name
+    ) throws Exception {
+        mlService.handleNominalValues(sessionId, name);
+        return new ResponseEntity<>("Attribute updated.", HttpStatus.OK);
+    }
+
+
+    @DeleteMapping("/delete-attribute/{attribute-name}")
+    @Operation(summary = "Add attribute to dataset", parameters = {
+            @Parameter(name = Constants.USER_SESSION, in = ParameterIn.HEADER)
+    })
+    public ResponseEntity<String> deleteAttribute(
+            @RequestHeader(value = Constants.USER_SESSION) String sessionId
+            , @PathVariable("attribute-name") String name
+    ) throws Exception {
+        mlService.deleteAttribute(sessionId, name);
+        return new ResponseEntity<>("Attribute deleted.", HttpStatus.OK);
+    }
+
+
+    @GetMapping("/outliers")
+    @Operation(summary = "Get outliers", parameters = {
+            @Parameter(name = Constants.USER_SESSION, in = ParameterIn.HEADER)
+    })
+    public ResponseEntity<List<Instance>> getOutliers(
+            @RequestHeader(value = Constants.USER_SESSION) String sessionId
+    ) throws Exception {
+        return new ResponseEntity<>(mlService.getOutliers(sessionId), HttpStatus.OK);
+    }
+
+
 }

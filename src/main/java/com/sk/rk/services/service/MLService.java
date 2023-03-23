@@ -1,47 +1,40 @@
 package com.sk.rk.services.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.opencsv.exceptions.CsvException;
-import com.sk.rk.services.exception.BaseException;
 import com.sk.rk.services.exception.BaseRunTimeException;
 import com.sk.rk.services.model.*;
-import com.sk.rk.services.sl.linear.Regression;
+import com.sk.rk.services.sl.MultipleLinearRegression;
 import com.sk.rk.services.utils.Constants;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import weka.attributeSelection.CfsSubsetEval;
-import weka.attributeSelection.ClassifierAttributeEval;
 import weka.attributeSelection.GreedyStepwise;
-import weka.attributeSelection.Ranker;
 import weka.classifiers.Evaluation;
 import weka.classifiers.bayes.NaiveBayes;
 import weka.classifiers.functions.LinearRegression;
 import weka.classifiers.functions.Logistic;
-import weka.classifiers.functions.SMOreg;
 import weka.classifiers.trees.J48;
+import weka.classifiers.trees.RandomForest;
 import weka.core.*;
 import weka.core.converters.ArffSaver;
 import weka.core.converters.CSVLoader;
 import weka.core.converters.ConverterUtils;
 import weka.filters.Filter;
 import weka.filters.supervised.attribute.AttributeSelection;
+import weka.filters.unsupervised.attribute.InterquartileRange;
 import weka.filters.unsupervised.attribute.Remove;
 import weka.filters.unsupervised.instance.NonSparseToSparse;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.math.BigInteger;
 import java.net.MalformedURLException;
-import java.net.URISyntaxException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -68,15 +61,17 @@ public class MLService {
 
     public UserSession uploadCSV(MultipartFile file) throws Exception {
 
-        String uploadedFileName = storageService.getFileNameToUpload(file);
+        storageService.getFileNameToUpload(file);
+        String fileName = file.getOriginalFilename();
 
-        storageService.uploadFile(file, Constants.CSV);
+
+        String uploadedFileName = storageService.uploadFile(file, Constants.CSV);
 
         log.info("ActionPlan_File_url: {}", uploadedFileName);
 
         Resource resource = loadFileAsResource(uploadedFileName, Constants.CSV);
 
-        return cacheManagement.createUserSession(resource.getFile().getAbsolutePath());
+        return cacheManagement.createUserSession(resource.getFile().getAbsolutePath(), fileName, uploadedFileName);
     }
 
 
@@ -168,8 +163,6 @@ public class MLService {
 
     public void attributeSelection() throws Exception {
 
-
-
         ConverterUtils.DataSource source = new ConverterUtils.DataSource("E:\\file-upload\\csv\\insurance - Copy.arff");
         Instances dataset = source.getDataSet();
 
@@ -189,7 +182,7 @@ public class MLService {
     }
 
 
-    public ConcurrentMap<?, Integer> getUniqueValuesWithCount(String sessionId, String fieldName) {
+    public ConcurrentMap<Object, Integer> getUniqueValuesWithCount(String sessionId, String fieldName) {
         Instances dataset = cacheManagement.getDatasource(sessionId);
         Attribute attribute = dataset.attribute(fieldName);
 
@@ -198,9 +191,9 @@ public class MLService {
         }
 
         if(attribute.isNumeric()) {
-            final ConcurrentMap<Double, Integer> distinctMap = new ConcurrentHashMap();
+            final ConcurrentMap<Object, Integer> distinctMap = new ConcurrentHashMap();
             for(int i = 0;i< dataset.size(); i++) {
-                double doubleValue = dataset.get(i).value(attribute.index());
+                Double doubleValue = dataset.get(i).value(attribute.index());
                 Integer valueFromMap = distinctMap.get(doubleValue);
                 if(valueFromMap==null) {
                     valueFromMap = 0;
@@ -212,7 +205,7 @@ public class MLService {
 
             return distinctMap;
         } else {
-            final ConcurrentMap<String, Integer> distinctMap = new ConcurrentHashMap();
+            final ConcurrentMap<Object, Integer> distinctMap = new ConcurrentHashMap();
             for(int i = 0;i< dataset.size(); i++) {
                 String doubleValue = dataset.get(i).stringValue(attribute.index());
                 Integer valueFromMap = distinctMap.get(doubleValue);
@@ -282,22 +275,33 @@ public class MLService {
         Instances dataset = cacheManagement.getTrainDataset(sessionId);
         dataset.setClassIndex(getClassIndex(dataset, request.getYColumn()));
 
-        Ranker ranker = new Ranker();
-
         Logistic logistic = new Logistic();
         logistic.buildClassifier(dataset);
 
-
-
         Evaluation evaluation = new Evaluation(dataset);
-
-        AttributeSelection attributeSelection = new AttributeSelection();
-
-
 
         Instances testDataset = cacheManagement.getTestDataset(sessionId);
         testDataset.setClassIndex(getClassIndex(testDataset, request.getYColumn()));
         evaluation.evaluateModel(logistic, testDataset);
+
+        return buildClassificationResponse(evaluation);
+    }
+
+
+    private ClassificationResponse randomForest(String sessionId, Request request) throws Exception {
+        Instances dataset = cacheManagement.getTrainDataset(sessionId);
+        dataset.setClassIndex(getClassIndex(dataset, request.getYColumn()));
+
+        RandomForest randomForest = new RandomForest();
+        randomForest.buildClassifier(dataset);
+
+        Evaluation evaluation = new Evaluation(dataset);
+
+        Instances testDataset = cacheManagement.getTestDataset(sessionId);
+        testDataset.setClassIndex(getClassIndex(testDataset, request.getYColumn()));
+        evaluation.evaluateModel(randomForest, testDataset);
+
+        log.info("Random Forest {}", randomForest.getCapabilities());
 
         return buildClassificationResponse(evaluation);
     }
@@ -316,21 +320,6 @@ public class MLService {
 
         return buildClassificationResponse(evaluation);
 
-/*        log.info(evaluation.toSummaryString("Evaluation result:\n", false));
-        log.info("PCF Correct: {}", evaluation.pctCorrect());
-        log.info("PCT Incorrect: {}", evaluation.pctIncorrect());
-        log.info("Area under ROC: {}", evaluation.areaUnderROC(1));
-        log.info("KAPPA: {}", evaluation.kappa());
-        log.info("Mean absolute error: {}", evaluation.meanAbsoluteError());
-        log.info("Root mean prior squared error: {}", evaluation.rootMeanPriorSquaredError());
-        log.info("Relative absolute error: {}", evaluation.relativeAbsoluteError());
-        log.info("Root relative squared error: {}", evaluation.rootRelativeSquaredError());
-        log.info("Precision: {}", evaluation.precision(1));
-        log.info("Recall: {}", evaluation.recall(1));
-        log.info("fMeasure: {}", evaluation.fMeasure(1));
-        log.info("Error Rate: {}", evaluation.errorRate());
-        log.info(evaluation.toMatrixString("==== Overall Confusion Matrix ====\n "));
-        return evaluation.toSummaryString();*/
     }
 
     private ClassificationResponse performNaiveBayesClassification(String sessionId, Request request) throws Exception {
@@ -359,6 +348,8 @@ public class MLService {
                 return performDecisionTreeJ48(sessionId, request);
             case "Logistic":
                 return performLogistic(sessionId, request);
+            case "RandomForest":
+                return randomForest(sessionId, request);
 
             default:
                 throw new BaseRunTimeException(400, "Specified algorithm " + request.getRegressionType() + " not found.");
@@ -367,7 +358,7 @@ public class MLService {
 
     private void prepareTrainTestDataset(Request request, String sessionId) {
         UserSession userSession = cacheManagement.getUserSession(sessionId);
-        Instances dataset = userSession.getDateset();
+        Instances dataset = userSession.getDataset();
 
         int trainDateRecords = Math.round ((dataset.size() * request.getTrainDataSize())/100);
 
@@ -378,7 +369,7 @@ public class MLService {
     private ClassificationResponse buildClassificationResponse(Evaluation evaluation) throws Exception {
 
         return ClassificationResponse.builder()
-                .areaUnderRoc(evaluation.areaUnderROC(1))
+                //.areaUnderRoc(evaluation.areaUnderROC(1))
                 .PctCorrect(evaluation.pctCorrect())
                 .PctIncorrect(evaluation.pctIncorrect())
                 .kappa(evaluation.kappa())
@@ -393,17 +384,250 @@ public class MLService {
 
     }
 
-    public RegressionResponse doRegression(String sessionId, Request request) throws Exception {
+    public RegressionResponse performLinearRegression(String sessionId, Request request) throws Exception {
         prepareTrainTestDataset(request, sessionId);
         Instances trainDataset = cacheManagement.getTrainDataset(sessionId);
         Attribute classAttribute = trainDataset.attribute(request.getYColumn());
         trainDataset.setClassIndex(getClassIndex(trainDataset, request.getYColumn()));
 
         LinearRegression regression = new LinearRegression();
+        regression.setMinimal(false);
+        regression.setOutputAdditionalStats(true);
         regression.buildClassifier(trainDataset);
 
+        Evaluation evaluation = new Evaluation(trainDataset);
 
-        return RegressionResponse.builder().message("testing message").build();
+        Instances testDataset = cacheManagement.getTestDataset(sessionId);
+        testDataset.setClassIndex(getClassIndex(testDataset, request.getYColumn()));
+        evaluation.evaluateModel(regression, testDataset);
 
+        return prepareRegressionResponse(trainDataset, evaluation);
     }
+
+
+    public RegressionResponse performRandomForestRegression(String sessionId, Request request) throws Exception {
+        prepareTrainTestDataset(request, sessionId);
+        Instances trainDataset = cacheManagement.getTrainDataset(sessionId);
+        Attribute classAttribute = trainDataset.attribute(request.getYColumn());
+        trainDataset.setClassIndex(getClassIndex(trainDataset, request.getYColumn()));
+
+        RandomForest regression = new RandomForest();
+        regression.setOutputOutOfBagComplexityStatistics(true);
+        regression.buildClassifier(trainDataset);
+
+        Evaluation evaluation = new Evaluation(trainDataset);
+
+        Instances testDataset = cacheManagement.getTestDataset(sessionId);
+        testDataset.setClassIndex(getClassIndex(testDataset, request.getYColumn()));
+        evaluation.evaluateModel(regression, testDataset);
+
+        return prepareRegressionResponse(trainDataset, evaluation);
+    }
+
+
+    public RegressionResponse doRegression(String sessionId, Request request) throws Exception {
+
+        switch (request.getRegressionType()) {
+            case "LinearRegression" :
+                return performLinearRegression(sessionId, request);
+            case "RandomForest":
+                return performRandomForestRegression(sessionId, request);
+        }
+
+        throw new BaseRunTimeException(404, "Specified algorithm not found.");
+    }
+
+
+
+    private RegressionResponse prepareRegressionResponse(Instances dataset, Evaluation evaluation) throws Exception {
+
+        return RegressionResponse.builder()
+                .correlationCoefficient(evaluation.correlationCoefficient())
+                .meanAbsoluteError(evaluation.meanAbsoluteError())
+                .relativeAbsoluteError(evaluation.relativeAbsoluteError())
+                .totalNumberOfInstance(dataset.numInstances())
+                .summary(evaluation.toSummaryString())
+                .build();
+    }
+
+
+    public Map<String, AttributeStatistic> getMissingValues(String sessionId)  {
+        Instances dataset = cacheManagement.getDatasource(sessionId);
+
+        if(dataset.classIndex() == -1) {
+            dataset.setClassIndex(dataset.numAttributes()-1);
+        }
+
+        Map<String, AttributeStatistic> missingValueMap = new HashMap<>();
+
+        int numAttr = dataset.numAttributes() - 1;
+        List<AttributeStatistic> attributeList = new ArrayList<>(numAttr);
+
+        for(int i=0; i<numAttr; i++) {
+            Attribute attribute = dataset.attribute(i);
+            AttributeStats as = dataset.attributeStats(i);
+
+            if(as.missingCount>0) {
+
+                AttributeStatistic atrSt = AttributeStatistic.builder()
+                        .averagable(attribute.isAveragable())
+                        .nominal(attribute.isNominal())
+                        .name(attribute.name())
+                        .regular(attribute.isRegular())
+                        .date(attribute.isDate())
+                        .numeric(attribute.isNumeric())
+                        .count(as.numericStats!=null?as.numericStats.count:null)
+                        .min(as.numericStats!=null?as.numericStats.min:null)
+                        .mean(as.numericStats!=null?as.numericStats.mean:null)
+                        .max(as.numericStats!=null?as.numericStats.max:null)
+                        .stdDev(as.numericStats!=null?as.numericStats.stdDev:null)
+                        .sum(as.numericStats!=null?as.numericStats.sum:null)
+                        .distinct(as.distinctCount)
+                        .unique(as.uniqueCount)
+                        .nominalCount(as.nominalCounts)
+                        .missing(as.missingCount)
+                        .build();
+
+                missingValueMap.put(attribute.name(), atrSt);
+            }
+        }
+
+        return missingValueMap;
+    }
+
+    public void handleNominalValues(String sessionId, String attributeName) {
+
+        Instances dataset = cacheManagement.getDatasource(sessionId);
+
+        int num = dataset.numAttributes();
+        Instance instance = dataset.instance(0);
+        String str = "";
+        prepareNominalValueMap(sessionId, attributeName);
+
+        UserSession userSession = cacheManagement.getUserSession(sessionId);
+        Map<String, Map> nominalValueMap = userSession.getNominalValueMap();
+        Iterator<String> iterator = nominalValueMap.keySet().iterator();
+
+        addAttribute(sessionId, attributeName+"-code");
+
+        dataset.parallelStream().forEach(inst -> {
+            Iterator keySetIt =  nominalValueMap.keySet().iterator();
+
+            int numAttr = inst.numAttributes();
+            Attribute sourceAttrib = inst.attribute(dataset.attribute(attributeName).index());
+            Attribute targetAttrib = inst.attribute(dataset.attribute(attributeName+"-code").index());
+            inst.setValue(targetAttrib, Integer.parseInt(nominalValueMap.get(attributeName).get(inst.stringValue(sourceAttrib)).toString()));
+        });
+    }
+
+
+    private Attribute getAttributeFromInstance(Instance instance, String attribName) {
+        int numAttr = instance.numAttributes();
+        for(int i=0; i<numAttr; i++) {
+            if(instance.attribute(i).name().equalsIgnoreCase(attribName)) {
+                return instance.attribute(i);
+            }
+        }
+
+        throw new BaseRunTimeException(404, "Attribute not found.");
+    }
+
+    private void prepareNominalValueMap(String sessionId, String attributeName) {
+        UserSession userSession = cacheManagement.getUserSession(sessionId);
+        Instances dataset = userSession.getDataset();
+
+        int num = dataset.numAttributes();
+        Map<String, ConcurrentMap<?, Integer>> nominalValueMap = new HashMap<>();
+
+        Attribute attribute = dataset.attribute(attributeName);
+        if(attribute.isNominal()) {
+            ConcurrentMap conMap = getUniqueValuesWithCount(sessionId, attribute.name());
+
+            Iterator it = conMap.keySet().iterator();
+            int code = 0;
+            while(it.hasNext()) {
+                Object obj = it.next();
+
+                conMap.put(obj, code);
+                code++;
+            }
+
+            userSession.getNominalValueMap().put(attribute.name(), conMap);
+            nominalValueMap.put(attribute.name(), getUniqueValuesWithCount(sessionId,attribute.name()));
+        }
+    }
+
+
+    public List<Map> getTopRecs(String sessionId, int noOfRec) {
+        Instances dataset = cacheManagement.getDatasource(sessionId);
+
+        List<Map> instanceList = new ArrayList<>(noOfRec);
+        int total = dataset.size();
+
+        ObjectMapper mapper = new ObjectMapper();
+
+        for(int j=0; j<noOfRec; j++) {
+            Instance instance = dataset.get(j);
+
+            int numattr = instance.numAttributes();
+            Map<String, Object> attributeMap = new HashMap<>();
+
+            for(int i=0; i<numattr; i++) {
+                Attribute attribute = instance.attribute(i);
+                attributeMap.put(attribute.name(), attribute.isNumeric()?instance.value(attribute):instance.stringValue(attribute));
+            }
+            instanceList.add(attributeMap);
+        }
+
+
+        return instanceList;
+    }
+
+    public List<Instance> getTrailRecs(String sessionId, int noOfRec) {
+        Instances dataset = cacheManagement.getDatasource(sessionId);
+        List<Instance> instanceList = new ArrayList<>(noOfRec);
+        int total = dataset.size();
+        int i = total - noOfRec;
+
+        for(;(i<noOfRec && i<total); i++) {
+            instanceList.add(dataset.get(i));
+        }
+
+        return instanceList;
+    }
+
+    public void addAttribute(String sessionId, String attributeName) {
+        Instances dataset = cacheManagement.getDatasource(sessionId);
+        Attribute attribute = new Attribute(attributeName);
+        dataset.insertAttributeAt(attribute, dataset.numAttributes());
+    }
+
+    public void deleteAttribute(String sessionId, String attributeName) {
+        Instances dataset = cacheManagement.getDatasource(sessionId);
+        Attribute attribute = dataset.attribute(attributeName);
+        dataset.deleteAttributeAt(attribute.index());
+    }
+
+    public List<Instance> getOutliers(String sessionId) throws Exception {
+        Instances dataset = cacheManagement.getDatasource(sessionId);
+
+        InterquartileRange interquartileRange = new InterquartileRange();
+        String[] options = {"-R", "first-last", "-E-as-O", "-M"};
+
+
+
+
+        Instances icopy = new Instances(dataset); //, 0, 1);
+
+        interquartileRange.setInputFormat(icopy);
+        interquartileRange.setOptions(options);
+
+
+        Instances filterDataset = Filter.useFilter(icopy, interquartileRange);
+
+
+
+        return filterDataset;
+    }
+
 }
