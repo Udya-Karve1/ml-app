@@ -6,7 +6,6 @@ import com.sk.rk.services.model.*;
 import com.sk.rk.services.sl.MultipleLinearRegression;
 import com.sk.rk.services.utils.Constants;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.collections4.CollectionUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
@@ -25,6 +24,7 @@ import weka.core.converters.CSVLoader;
 import weka.core.converters.ConverterUtils;
 import weka.filters.Filter;
 import weka.filters.supervised.attribute.AttributeSelection;
+import weka.filters.supervised.attribute.NominalToBinary;
 import weka.filters.unsupervised.attribute.InterquartileRange;
 import weka.filters.unsupervised.attribute.Remove;
 import weka.filters.unsupervised.instance.NonSparseToSparse;
@@ -35,6 +35,7 @@ import java.net.MalformedURLException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -400,6 +401,11 @@ public class MLService {
         Instances testDataset = cacheManagement.getTestDataset(sessionId);
         testDataset.setClassIndex(getClassIndex(testDataset, request.getYColumn()));
         evaluation.evaluateModel(regression, testDataset);
+        double[] coefficients = regression.coefficients();
+
+
+        MultipleLinearRegression mulRegression = new MultipleLinearRegression();
+        mulRegression.prepareModel(trainDataset);
 
         return prepareRegressionResponse(trainDataset, evaluation);
     }
@@ -608,26 +614,96 @@ public class MLService {
         dataset.deleteAttributeAt(attribute.index());
     }
 
-    public List<Instance> getOutliers(String sessionId) throws Exception {
+    public Map<String, Integer> getOutliers(String sessionId) throws Exception {
         Instances dataset = cacheManagement.getDatasource(sessionId);
 
         InterquartileRange interquartileRange = new InterquartileRange();
-        String[] options = {"-R", "first-last", "-E-as-O", "-M"};
-
-
-
-
         Instances icopy = new Instances(dataset); //, 0, 1);
 
         interquartileRange.setInputFormat(icopy);
-        interquartileRange.setOptions(options);
+        interquartileRange.setOptions(Constants.INTER_QUARTILE_OPTION);
 
+        Map<String, Integer> outlierCountMap = new HashMap<>();
+        List<Attribute> attributeNames = new ArrayList<>();
 
         Instances filterDataset = Filter.useFilter(icopy, interquartileRange);
+        for(int i=0;i<filterDataset.numAttributes(); i++) {
+            if(filterDataset.attribute(i).name().contains("_Outlier")) {
+                attributeNames.add(filterDataset.attribute(i));
+                outlierCountMap.put(filterDataset.attribute(i).name(), 0);
+            }
+        }
+
+        filterDataset.stream().parallel().forEach(instance -> {
+            attributeNames.stream().forEach(attr->{
+
+                if(instance.stringValue(attr).equals("yes")) {
+                    outlierCountMap.put(attr.name(), (outlierCountMap.get(attr.name()).intValue()+1));
+                }
+            });
+        });
+
+        return outlierCountMap;
+    }
 
 
+    public Map<String, Object> getDataset(String sessionId) throws Exception {
+        Instances dataset = cacheManagement.getDatasource(sessionId);
+        int noOfRec = dataset.numInstances();
 
-        return filterDataset;
+        List<Map> instanceList = new ArrayList<>(dataset.numInstances());
+        int total = dataset.size();
+
+        ObjectMapper mapper = new ObjectMapper();
+        Map<String, Object> responseMap = new HashMap<>();
+
+        for(int j=0; j<noOfRec; j++) {
+            Instance instance = dataset.get(j);
+
+            int numAttr = instance.numAttributes();
+            Map<String, Object> attributeMap = new HashMap<>();
+
+            for(int i=0; i<numAttr; i++) {
+                if(dataset.attribute(i).isNumeric()) {
+                    responseMap.put(dataset.attribute(i).name(), dataset.attributeToDoubleArray(i)) ;
+                }
+            }
+        }
+
+        return responseMap;
+    }
+
+    public List<Map<String, Object>> convertNominalToBinary(String sessionId) throws Exception {
+        Instances dataset = cacheManagement.getDatasource(sessionId);
+        String[] remoteOpt = new String[]{ "-N", "-spread-attribute-weight"};
+
+        NominalToBinary nominalToBinary = new NominalToBinary();
+        nominalToBinary.setOptions(remoteOpt);
+        nominalToBinary.setInputFormat(dataset);
+
+
+        Instances filterDataset = Filter.useFilter(dataset, nominalToBinary);
+
+
+        int numAttr = filterDataset.numAttributes();
+        List<Attribute> attributes = new ArrayList<>();
+        for(int i=0; i<numAttr; i++) {
+            attributes.add(filterDataset.attribute(i));
+        }
+
+
+        return filterDataset.stream().parallel().map(instance -> {
+            Map<String, Object> valueMap = new HashMap<>();
+            attributes.stream().forEach(attribute -> {
+                if(attribute.isNumeric()) {
+                    valueMap.put(attribute.name(), instance.value(attribute));
+                } else {
+                    valueMap.put(attribute.name(), instance.stringValue(attribute));
+                }
+            });
+
+            return valueMap;
+        }).collect(Collectors.toList());
     }
 
 }

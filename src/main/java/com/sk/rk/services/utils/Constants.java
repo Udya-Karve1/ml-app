@@ -32,4 +32,5 @@ public class Constants {
 	public static final String USER_SESSION = "user-session";
 	protected static final String[] CLASSIFICATION_TYPES = new String[]{"Logistic Regression","Decision Tree","Random forest","Support vector machine","K-nearest neighbour","Naive bayes"};
 	protected static final String[] REGRESSION_TYPES = {"Random Forest", "KNN Model","Support Vector Machines","Gausian Regression","Polynomial Regression"};
+	public static final String[] INTER_QUARTILE_OPTION = {"-R", "first-last", "-E-as-O", "-M"};
 }

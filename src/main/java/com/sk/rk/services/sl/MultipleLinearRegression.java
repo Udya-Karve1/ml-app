@@ -45,7 +45,8 @@ public class MultipleLinearRegression extends LinearRegression {
 
 
     private void prepareEvaluations() throws Exception {
-        double se = super.calculateSE(super.m_SelectedAttributes, super.m_Coefficients);
+        double se = calculateSECustom(super.m_SelectedAttributes, super.m_Coefficients);
+
         rSquared = RegressionAnalysis.calculateRSquared(super.m_TransformedData, se);
         rSquaredAdj = RegressionAnalysis.calculateAdjRSquared(rSquared, m_TransformedData.numInstances(), this.dataset.size());
         fStat = RegressionAnalysis.calculateFStat(rSquared, m_TransformedData.numInstances(), this.dataset.size());
@@ -55,7 +56,19 @@ public class MultipleLinearRegression extends LinearRegression {
         this.selectedAttribute = super.m_SelectedAttributes;
     }
 
+    protected double calculateSECustom(boolean[] selectedAttributes,
+                                 double[] coefficients) throws Exception {
 
+        double mse = 0;
+        for (int i = 0; i < super.m_TransformedData.numInstances(); i++) {
+            double prediction =
+                    regressionPrediction(super.m_TransformedData.instance(i), selectedAttributes,
+                            coefficients);
+            double error = prediction - super.m_TransformedData.instance(i).classValue();
+            mse += error * error;
+        }
+        return mse;
+    }
     public double getRSquared() {
         return rSquared;
     }

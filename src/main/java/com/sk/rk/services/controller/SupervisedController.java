@@ -158,11 +158,29 @@ public class SupervisedController {
     @Operation(summary = "Get outliers", parameters = {
             @Parameter(name = Constants.USER_SESSION, in = ParameterIn.HEADER)
     })
-    public ResponseEntity<List<Instance>> getOutliers(
+    public ResponseEntity<Map<String, Integer>> getOutliers(
             @RequestHeader(value = Constants.USER_SESSION) String sessionId
     ) throws Exception {
         return new ResponseEntity<>(mlService.getOutliers(sessionId), HttpStatus.OK);
     }
 
+    @GetMapping("/data-set")
+    @Operation(summary = "Get outliers", parameters = {
+            @Parameter(name = Constants.USER_SESSION, in = ParameterIn.HEADER)
+    })
+    public ResponseEntity<Map<String, Object>> getDataset(
+            @RequestHeader(value = Constants.USER_SESSION) String sessionId
+    ) throws Exception {
+        return new ResponseEntity<>(mlService.getDataset(sessionId), HttpStatus.OK);
+    }
 
+    @PutMapping("/handle-categorical")
+    @Operation(summary = "Handle nominal", parameters = {
+            @Parameter(name = Constants.USER_SESSION, in = ParameterIn.HEADER)
+    })
+    public ResponseEntity<List<Map<String, Object>>> handleNominal(
+            @RequestHeader(value = Constants.USER_SESSION) String sessionId
+    ) throws Exception {
+        return new ResponseEntity<>(mlService.convertNominalToBinary(sessionId), HttpStatus.OK);
+    }
 }
