@@ -214,4 +214,16 @@ public class MLController {
     ) throws Exception {
         return new ResponseEntity<>(mlService.doCluster(sessionId, request), HttpStatus.OK);
     }
+
+    @GetMapping("/correlation/{class-attribute}")
+    @Operation(summary = "Get outliers", parameters = {
+            @Parameter(name = Constants.USER_SESSION, in = ParameterIn.HEADER)
+    })
+    public ResponseEntity<double[][]> getCorrelation(
+            @RequestHeader(value = Constants.USER_SESSION) String sessionId
+            , @PathVariable("class-attribute") String classAttribute
+    ) throws Exception {
+        return new ResponseEntity<>(mlService.getCorrelation(sessionId, classAttribute), HttpStatus.OK);
+    }
+
 }

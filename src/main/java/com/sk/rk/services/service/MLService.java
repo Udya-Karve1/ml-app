@@ -14,9 +14,7 @@ import org.springframework.web.multipart.MultipartFile;
 import weka.associations.Apriori;
 import weka.associations.AssociatorEvaluation;
 import weka.associations.FPGrowth;
-import weka.attributeSelection.BestFirst;
-import weka.attributeSelection.CfsSubsetEval;
-import weka.attributeSelection.GreedyStepwise;
+import weka.attributeSelection.*;
 import weka.classifiers.Evaluation;
 import weka.classifiers.bayes.NaiveBayes;
 import weka.classifiers.functions.LinearRegression;
@@ -860,7 +858,6 @@ public class MLService {
 
         AttributeSelection filter = new AttributeSelection();
 
-
         CfsSubsetEval evaluation = new CfsSubsetEval();
         evaluation.setMissingSeparate(true);
         evaluation.setLocallyPredictive(true);
@@ -891,4 +888,31 @@ public class MLService {
         return listAttribute;
     }
 
+
+
+    public double[][] getCorrelation(String sessionId, String classAttribute) throws Exception {
+        Instances dataset = cacheManagement.getDatasource(sessionId);
+        dataset.setClassIndex(getClassIndex(dataset, classAttribute));
+
+        AttributeSelection filter = new AttributeSelection();
+        PrincipalComponents evaluator = new PrincipalComponents();
+
+        Ranker search = new Ranker();
+        search.setGenerateRanking(true);
+
+        filter.setSearch(search);
+        filter.setEvaluator(evaluator);
+        filter.setInputFormat(dataset);
+
+        Instances newInstances = Filter.useFilter(dataset, filter);
+        double[][] correlationMatrix = evaluator.getCorrelationMatrix();
+
+
+        for(int i=0; i<correlationMatrix.length; i++) {
+            correlationMatrix[i][i] = 1.000;
+        }
+
+
+        return correlationMatrix;
+    }
 }
