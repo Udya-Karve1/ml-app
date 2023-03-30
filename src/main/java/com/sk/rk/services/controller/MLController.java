@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import weka.core.Instance;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
@@ -21,7 +20,7 @@ import java.util.concurrent.ConcurrentMap;
 
 @RestController
 @RequestMapping("/v1/ml-api")
-public class SupervisedController {
+public class MLController {
 
     @Autowired
     private MLService mlService;
@@ -140,7 +139,6 @@ public class SupervisedController {
         return new ResponseEntity<>("Attribute updated.", HttpStatus.OK);
     }
 
-
     @DeleteMapping("/delete-attribute/{attribute-name}")
     @Operation(summary = "Add attribute to dataset", parameters = {
             @Parameter(name = Constants.USER_SESSION, in = ParameterIn.HEADER)
@@ -153,6 +151,17 @@ public class SupervisedController {
         return new ResponseEntity<>("Attribute deleted.", HttpStatus.OK);
     }
 
+    @GetMapping("/predictive-ability/{class-attribute}")
+    @Operation(summary = "Get outliers", parameters = {
+            @Parameter(name = Constants.USER_SESSION, in = ParameterIn.HEADER),
+            @Parameter(name = "ClassAttribute", in = ParameterIn.PATH)
+    })
+    public ResponseEntity<List<String>> getPredictiveAbility(
+            @RequestHeader(value = Constants.USER_SESSION) String sessionId
+            , @PathVariable("class-attribute") String classAttribute
+    ) throws Exception {
+        return new ResponseEntity<>(mlService.getPredictiveAbility(sessionId, classAttribute), HttpStatus.OK);
+    }
 
     @GetMapping("/outliers")
     @Operation(summary = "Get outliers", parameters = {
@@ -181,6 +190,28 @@ public class SupervisedController {
     public ResponseEntity<List<Map<String, Object>>> handleNominal(
             @RequestHeader(value = Constants.USER_SESSION) String sessionId
     ) throws Exception {
-        return new ResponseEntity<>(mlService.convertNominalToBinary(sessionId), HttpStatus.OK);
+        return new ResponseEntity<>(mlService.convertNominalToBinary(sessionId, null), HttpStatus.OK);
+    }
+
+    @PostMapping("/association")
+    @Operation(summary = "Handle nominal", parameters = {
+            @Parameter(name = Constants.USER_SESSION, in = ParameterIn.HEADER)
+    })
+    public ResponseEntity<String> performAssociation(
+            @RequestHeader(value = Constants.USER_SESSION) String sessionId
+            , @RequestBody Request request
+    ) throws Exception {
+        return new ResponseEntity<>(mlService.doAssociation(sessionId, request), HttpStatus.OK);
+    }
+
+    @PostMapping("/clustering")
+    @Operation(summary = "Handle nominal", parameters = {
+            @Parameter(name = Constants.USER_SESSION, in = ParameterIn.HEADER)
+    })
+    public ResponseEntity<String> performClustering(
+            @RequestHeader(value = Constants.USER_SESSION) String sessionId
+            , @RequestBody Request request
+    ) throws Exception {
+        return new ResponseEntity<>(mlService.doCluster(sessionId, request), HttpStatus.OK);
     }
 }

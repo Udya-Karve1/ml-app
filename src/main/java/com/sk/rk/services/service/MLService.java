@@ -6,10 +6,15 @@ import com.sk.rk.services.model.*;
 import com.sk.rk.services.sl.MultipleLinearRegression;
 import com.sk.rk.services.utils.Constants;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.logging.log4j.util.Strings;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import weka.associations.Apriori;
+import weka.associations.AssociatorEvaluation;
+import weka.associations.FPGrowth;
+import weka.attributeSelection.BestFirst;
 import weka.attributeSelection.CfsSubsetEval;
 import weka.attributeSelection.GreedyStepwise;
 import weka.classifiers.Evaluation;
@@ -18,15 +23,18 @@ import weka.classifiers.functions.LinearRegression;
 import weka.classifiers.functions.Logistic;
 import weka.classifiers.trees.J48;
 import weka.classifiers.trees.RandomForest;
+import weka.clusterers.*;
 import weka.core.*;
 import weka.core.converters.ArffSaver;
 import weka.core.converters.CSVLoader;
 import weka.core.converters.ConverterUtils;
 import weka.filters.Filter;
+import weka.filters.SupervisedFilter;
 import weka.filters.supervised.attribute.AttributeSelection;
 import weka.filters.supervised.attribute.NominalToBinary;
 import weka.filters.unsupervised.attribute.InterquartileRange;
 import weka.filters.unsupervised.attribute.Remove;
+import weka.filters.unsupervised.attribute.StringToNominal;
 import weka.filters.unsupervised.instance.NonSparseToSparse;
 
 import java.io.File;
@@ -269,6 +277,9 @@ public class MLService {
     }
 
     private int getClassIndex(Instances dataset, String name) {
+        if(null!=name && Strings.isNotBlank(name)) {
+            name = dataset.attribute((dataset.numAttributes()-1)).name();
+        }
         return dataset.attribute(name).index();
     }
 
@@ -347,9 +358,9 @@ public class MLService {
                 return performNaiveBayesClassification(sessionId, request);
             case "Tree":
                 return performDecisionTreeJ48(sessionId, request);
-            case "Logistic":
+            case "Logistic regression":
                 return performLogistic(sessionId, request);
-            case "RandomForest":
+            case "Random Forest":
                 return randomForest(sessionId, request);
 
             default:
@@ -398,6 +409,16 @@ public class MLService {
 
         Evaluation evaluation = new Evaluation(trainDataset);
 
+        CfsSubsetEval cfsSubsetEval = new CfsSubsetEval();
+        cfsSubsetEval.setMissingSeparate(true);
+        BestFirst bestFirst = new BestFirst();
+        AttributeSelection filter = new AttributeSelection();
+        filter.setInputFormat(trainDataset);
+        filter.setSearch(bestFirst);
+        filter.setEvaluator(cfsSubsetEval);
+        Instances filteredDataset = Filter.useFilter(trainDataset, filter);
+
+
         Instances testDataset = cacheManagement.getTestDataset(sessionId);
         testDataset.setClassIndex(getClassIndex(testDataset, request.getYColumn()));
         evaluation.evaluateModel(regression, testDataset);
@@ -432,6 +453,10 @@ public class MLService {
 
 
     public RegressionResponse doRegression(String sessionId, Request request) throws Exception {
+
+        if(cacheManagement.isNominalAttribute(sessionId)) {
+            convertNominalToBinary(sessionId, request.getYColumn());
+        }
 
         switch (request.getRegressionType()) {
             case "LinearRegression" :
@@ -647,6 +672,10 @@ public class MLService {
     }
 
 
+
+
+
+
     public Map<String, Object> getDataset(String sessionId) throws Exception {
         Instances dataset = cacheManagement.getDatasource(sessionId);
         int noOfRec = dataset.numInstances();
@@ -673,24 +702,28 @@ public class MLService {
         return responseMap;
     }
 
-    public List<Map<String, Object>> convertNominalToBinary(String sessionId) throws Exception {
+    public List<Map<String, Object>> convertNominalToBinary(String sessionId, String classAttribute) throws Exception {
         Instances dataset = cacheManagement.getDatasource(sessionId);
+        dataset.setClassIndex(getClassIndex(dataset, classAttribute));
         String[] remoteOpt = new String[]{ "-N", "-spread-attribute-weight"};
 
+
         NominalToBinary nominalToBinary = new NominalToBinary();
+        nominalToBinary.setBinaryAttributesNominal(false);
         nominalToBinary.setOptions(remoteOpt);
         nominalToBinary.setInputFormat(dataset);
 
 
+        StringToNominal stringToNominal = new StringToNominal();
+
         Instances filterDataset = Filter.useFilter(dataset, nominalToBinary);
+        cacheManagement.updateDataset(sessionId, filterDataset);
 
-
-        int numAttr = filterDataset.numAttributes();
+            int numAttr = filterDataset.numAttributes();
         List<Attribute> attributes = new ArrayList<>();
         for(int i=0; i<numAttr; i++) {
             attributes.add(filterDataset.attribute(i));
         }
-
 
         return filterDataset.stream().parallel().map(instance -> {
             Map<String, Object> valueMap = new HashMap<>();
@@ -704,6 +737,158 @@ public class MLService {
 
             return valueMap;
         }).collect(Collectors.toList());
+    }
+
+    private String performApriori(String sessionId) throws Exception {
+        Instances trainDataset = cacheManagement.getTrainDataset(sessionId);
+        Instances testDataset = cacheManagement.getTestDataset(sessionId);
+
+        Apriori apriori = new Apriori();
+        apriori.buildAssociations(trainDataset);
+
+        AssociatorEvaluation evaluation = new AssociatorEvaluation();
+        String evaluationString = evaluation.evaluate(apriori, testDataset);
+
+        return apriori.toString() + "\n Evaluation: \n" + evaluationString;
+    }
+
+
+    private String performFPGrowth(String sessionId) throws Exception {
+        Instances trainDataset = cacheManagement.getTrainDataset(sessionId);
+        Instances testDataset = cacheManagement.getTestDataset(sessionId);
+
+        FPGrowth fpGrowth = new FPGrowth();
+        fpGrowth.buildAssociations(trainDataset);
+
+        AssociatorEvaluation evaluation = new AssociatorEvaluation();
+        String evaluationString = evaluation.evaluate(fpGrowth, testDataset);
+
+        return fpGrowth.toString() + "\n Evaluation: \n" + evaluationString;
+    }
+
+    public String doAssociation(String sessionId, Request request) throws Exception {
+        prepareTrainTestDataset(request, sessionId);
+        switch (request.getRegressionType()) {
+            case "Apriori":
+                return performApriori(sessionId);
+            case "FPGrowth":
+                return performFPGrowth(sessionId);
+
+            default:
+                throw new BaseRunTimeException(400, "Specified algorithm " + request.getRegressionType() + " not found.");
+        }
+    }
+
+    private String performCanopy(String sessionId) throws Exception {
+        Instances trainDataset = cacheManagement.getTrainDataset(sessionId);
+        Instances testDataset = cacheManagement.getTestDataset(sessionId);
+
+        Canopy canopy = new Canopy();
+        canopy.buildClusterer(trainDataset);
+
+        ClusterEvaluation evaluation = new ClusterEvaluation();
+        evaluation.setClusterer(canopy);
+        evaluation.evaluateClusterer(testDataset);
+
+        return canopy.toString() + "\n Evaluation: \n" + evaluation.toString();
+    }
+
+    private String performCobweb(String sessionId) throws Exception {
+        Instances trainDataset = cacheManagement.getTrainDataset(sessionId);
+        Instances testDataset = cacheManagement.getTestDataset(sessionId);
+
+        Cobweb cobweb = new Cobweb();
+        cobweb.buildClusterer(trainDataset);
+
+        ClusterEvaluation evaluation = new ClusterEvaluation();
+        evaluation.setClusterer(cobweb);
+        evaluation.evaluateClusterer(testDataset);
+
+        return cobweb.toString() + "\n Evaluation: \n" + evaluation.toString();
+    }
+
+    private String performSimpleKMean(String sessionId) throws Exception {
+        Instances trainDataset = cacheManagement.getTrainDataset(sessionId);
+        Instances testDataset = cacheManagement.getTestDataset(sessionId);
+
+        SimpleKMeans simpleKMeans = new SimpleKMeans();
+        simpleKMeans.buildClusterer(trainDataset);
+
+        ClusterEvaluation evaluation = new ClusterEvaluation();
+        evaluation.setClusterer(simpleKMeans);
+        evaluation.evaluateClusterer(testDataset);
+
+        return simpleKMeans.toString() + "\n Evaluation: \n" + evaluation.toString();
+    }
+
+    private String performFarthestFirst(String sessionId) throws Exception {
+        Instances trainDataset = cacheManagement.getTrainDataset(sessionId);
+        Instances testDataset = cacheManagement.getTestDataset(sessionId);
+
+        FarthestFirst farthestFirst = new FarthestFirst();
+        farthestFirst.buildClusterer(trainDataset);
+
+        ClusterEvaluation evaluation = new ClusterEvaluation();
+        evaluation.setClusterer(farthestFirst);
+        evaluation.evaluateClusterer(testDataset);
+
+        return farthestFirst.toString() + "\n Evaluation: \n" + evaluation.toString();
+    }
+
+    public String doCluster(String sessionId, Request request) throws Exception {
+        prepareTrainTestDataset(request, sessionId);
+        switch (request.getRegressionType()) {
+            case "Canopy":
+                return performCanopy(sessionId);
+            case "Cobweb":
+                return performCobweb(sessionId);
+            case "SimpleKMean":
+                return performSimpleKMean(sessionId);
+            case "FarthestFirst(":
+                return performFarthestFirst(sessionId);
+
+            default:
+                throw new BaseRunTimeException(400, "Specified algorithm " + request.getRegressionType() + " not found.");
+        }
+    }
+
+
+    public List<String> getPredictiveAbility(String sessionId, String classAttribute) throws Exception {
+        Instances dataset = cacheManagement.getDatasource(sessionId);
+
+        dataset.setClassIndex(getClassIndex(dataset, classAttribute));
+
+        AttributeSelection filter = new AttributeSelection();
+
+
+        CfsSubsetEval evaluation = new CfsSubsetEval();
+        evaluation.setMissingSeparate(true);
+        evaluation.setLocallyPredictive(true);
+        evaluation.setPreComputeCorrelationMatrix(true);
+        evaluation.setDoNotCheckCapabilities(false);
+
+        GreedyStepwise search = new GreedyStepwise();
+        search.setGenerateRanking(true);
+
+        search.setSearchBackwards(true);
+        filter.setEvaluator(evaluation);
+        filter.setSearch(search);
+        filter.setInputFormat(dataset);
+
+        Instances newDataset = Filter.useFilter(dataset, filter);
+        int numAttr = newDataset.numAttributes();
+        List<String> listAttribute = new ArrayList<>();
+
+        for(int i=0; i<numAttr; i++) {
+            listAttribute.add(newDataset.attribute(i).name());
+        }
+
+        log.info("cfsSubsetEval ======================");
+        log.info(filter.toString());
+        log.info(search.toString());
+        log.info(evaluation.toString());
+
+        return listAttribute;
     }
 
 }

@@ -65,4 +65,21 @@ public class CacheManagement {
         return session.getTestDataset();
     }
 
+    public void updateDataset(String sessionId, Instances instances) {
+        UserSession userSession = getUserSession(sessionId);
+        userSession.setDataset(instances);
+    }
+
+    public boolean isNominalAttribute(String sessionId) {
+        Instances instances = getDatasource(sessionId);
+        int numAttr = instances.numAttributes();
+        for(int i=0; i<numAttr; i++) {
+            if(instances.attribute(i).isNominal())
+                return true;
+        }
+
+
+        return false;
+    }
+
 }
