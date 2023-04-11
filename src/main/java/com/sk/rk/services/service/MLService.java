@@ -276,9 +276,13 @@ public class MLService {
 
     private int getClassIndex(Instances dataset, String name) {
         if(null!=name && Strings.isNotBlank(name)) {
-            name = dataset.attribute((dataset.numAttributes()-1)).name();
+            for(int i=0; i<dataset.numAttributes(); i++) {
+                if(dataset.attribute(i).name().equalsIgnoreCase(name)) {
+                    return i;
+                }
+            }
         }
-        return dataset.attribute(name).index();
+        throw new BaseRunTimeException(400 , "Class attribute not found: " + name);
     }
 
     private ClassificationResponse performLogistic(String sessionId, Request request) throws Exception {
@@ -329,7 +333,6 @@ public class MLService {
         evaluation.evaluateModel(tree, testDataset);
 
         return buildClassificationResponse(evaluation);
-
     }
 
     private ClassificationResponse performNaiveBayesClassification(String sessionId, Request request) throws Exception {
@@ -407,26 +410,30 @@ public class MLService {
 
         Evaluation evaluation = new Evaluation(trainDataset);
 
-        CfsSubsetEval cfsSubsetEval = new CfsSubsetEval();
-        cfsSubsetEval.setMissingSeparate(true);
-        BestFirst bestFirst = new BestFirst();
-        AttributeSelection filter = new AttributeSelection();
-        filter.setInputFormat(trainDataset);
-        filter.setSearch(bestFirst);
-        filter.setEvaluator(cfsSubsetEval);
-        Instances filteredDataset = Filter.useFilter(trainDataset, filter);
-
 
         Instances testDataset = cacheManagement.getTestDataset(sessionId);
         testDataset.setClassIndex(getClassIndex(testDataset, request.getYColumn()));
         evaluation.evaluateModel(regression, testDataset);
         double[] coefficients = regression.coefficients();
 
+        boolean[] selectedAttr = regression.getM_SelectedAttributes();
+        List<String> list = new ArrayList<>();
+        for(int i=0; i<trainDataset.numAttributes(); i++) {
+            if(selectedAttr[i]) {
+                list.add(trainDataset.attribute(i).name());
+            }
+        }
 
-        MultipleLinearRegression mulRegression = new MultipleLinearRegression();
-        mulRegression.prepareModel(trainDataset);
-
-        return prepareRegressionResponse(trainDataset, evaluation);
+        RegressionResponse regressionResponse = prepareRegressionResponse(trainDataset, evaluation);
+        regressionResponse.setCoefficients(regression.getM_Coefficients());
+        regressionResponse.setFStat(regression.getM_FStat());
+        regressionResponse.setRSquared(regression.getM_RSquared());
+        regressionResponse.setRSquaredAdj(regression.getM_RSquaredAdj());
+        regressionResponse.setTStats(regression.getM_TStats());
+        regression.getM_SelectedAttributes();
+        regressionResponse.setSelectedAttributeNames(list);
+        regressionResponse.setStdErrorOfCoefficient(regression.getM_StdErrorOfCoef());
+        return regressionResponse;
     }
 
 
@@ -451,10 +458,6 @@ public class MLService {
 
 
     public RegressionResponse doRegression(String sessionId, Request request) throws Exception {
-
-        if(cacheManagement.isNominalAttribute(sessionId)) {
-            convertNominalToBinary(sessionId, request.getYColumn());
-        }
 
         switch (request.getRegressionType()) {
             case "LinearRegression" :
@@ -717,7 +720,8 @@ public class MLService {
         Instances filterDataset = Filter.useFilter(dataset, nominalToBinary);
         cacheManagement.updateDataset(sessionId, filterDataset);
 
-            int numAttr = filterDataset.numAttributes();
+        int numAttr = filterDataset.numAttributes();
+
         List<Attribute> attributes = new ArrayList<>();
         for(int i=0; i<numAttr; i++) {
             attributes.add(filterDataset.attribute(i));
@@ -844,7 +848,6 @@ public class MLService {
                 return performSimpleKMean(sessionId);
             case "FarthestFirst(":
                 return performFarthestFirst(sessionId);
-
             default:
                 throw new BaseRunTimeException(400, "Specified algorithm " + request.getRegressionType() + " not found.");
         }
@@ -907,11 +910,9 @@ public class MLService {
         Instances newInstances = Filter.useFilter(dataset, filter);
         double[][] correlationMatrix = evaluator.getCorrelationMatrix();
 
-
         for(int i=0; i<correlationMatrix.length; i++) {
             correlationMatrix[i][i] = 1.000;
         }
-
 
         return correlationMatrix;
     }
