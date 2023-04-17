@@ -3,7 +3,6 @@ package com.sk.rk.services.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sk.rk.services.exception.BaseRunTimeException;
 import com.sk.rk.services.model.*;
-import com.sk.rk.services.sl.MultipleLinearRegression;
 import com.sk.rk.services.utils.Constants;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.logging.log4j.util.Strings;
@@ -15,11 +14,16 @@ import weka.associations.Apriori;
 import weka.associations.AssociatorEvaluation;
 import weka.associations.FPGrowth;
 import weka.attributeSelection.*;
+import weka.attributeSelection.PrincipalComponents;
+import weka.classifiers.AbstractClassifier;
 import weka.classifiers.Evaluation;
 import weka.classifiers.bayes.NaiveBayes;
 import weka.classifiers.functions.LinearRegression;
 import weka.classifiers.functions.Logistic;
+import weka.classifiers.functions.MultilayerPerceptron;
+import weka.classifiers.functions.SMO;
 import weka.classifiers.trees.J48;
+import weka.classifiers.trees.M5P;
 import weka.classifiers.trees.RandomForest;
 import weka.clusterers.*;
 import weka.core.*;
@@ -29,10 +33,8 @@ import weka.core.converters.ConverterUtils;
 import weka.filters.Filter;
 import weka.filters.SupervisedFilter;
 import weka.filters.supervised.attribute.AttributeSelection;
-import weka.filters.supervised.attribute.NominalToBinary;
-import weka.filters.unsupervised.attribute.InterquartileRange;
-import weka.filters.unsupervised.attribute.Remove;
-import weka.filters.unsupervised.attribute.StringToNominal;
+
+import weka.filters.unsupervised.attribute.*;
 import weka.filters.unsupervised.instance.NonSparseToSparse;
 
 import java.io.File;
@@ -351,18 +353,72 @@ public class MLService {
         return buildClassificationResponse(evaluation);
     }
 
+    public ClassificationResponse performKNearestNeighbors(String sessionId, Request request) {
+/*        Instances trainDataset = cacheManagement.getTrainDataset(sessionId);
+        Attribute classAttribute = trainDataset.attribute(request.getYColumn());
+
+        trainDataset.setClassIndex(getClassIndex(trainDataset, request.getYColumn()));
+        KNN
+        .buildClassifier(trainDataset);
+
+        Instances testDataset = cacheManagement.getTestDataset(sessionId);
+        testDataset.setClassIndex(getClassIndex(testDataset, request.getYColumn()));
+        Evaluation evaluation = new Evaluation(trainDataset);
+        evaluation.evaluateModel(naiveBayes, cacheManagement.getTestDataset(sessionId));
+
+        return buildClassificationResponse(evaluation);*/
+
+        return null;
+    }
+    public ClassificationResponse performRandomForest(String sessionId, Request request) throws Exception {
+        Instances trainDataset = cacheManagement.getTrainDataset(sessionId);
+        Attribute classAttribute = trainDataset.attribute(request.getYColumn());
+
+        trainDataset.setClassIndex(getClassIndex(trainDataset, request.getYColumn()));
+        RandomForest randomForest = new RandomForest();
+        randomForest.buildClassifier(trainDataset);
+
+        Instances testDataset = cacheManagement.getTestDataset(sessionId);
+        testDataset.setClassIndex(getClassIndex(testDataset, request.getYColumn()));
+        Evaluation evaluation = new Evaluation(trainDataset);
+        evaluation.evaluateModel(randomForest, cacheManagement.getTestDataset(sessionId));
+
+        return buildClassificationResponse(evaluation);
+    }
+    public ClassificationResponse performSupportVectorMachines(String sessionId, Request request) throws Exception {
+
+        Instances trainDataset = cacheManagement.getTrainDataset(sessionId);
+        Attribute classAttribute = trainDataset.attribute(request.getYColumn());
+
+        trainDataset.setClassIndex(getClassIndex(trainDataset, request.getYColumn()));
+
+        SMO smo = new SMO();
+        smo.buildClassifier(trainDataset);
+
+        Instances testDataset = cacheManagement.getTestDataset(sessionId);
+        testDataset.setClassIndex(getClassIndex(testDataset, request.getYColumn()));
+        Evaluation evaluation = new Evaluation(trainDataset);
+        evaluation.evaluateModel(smo, cacheManagement.getTestDataset(sessionId));
+
+        return buildClassificationResponse(evaluation);
+    }
+
 
     public ClassificationResponse doClassification(String sessionId, Request request) throws Exception {
         prepareTrainTestDataset(request, sessionId);
         switch (request.getRegressionType()) {
             case "NaiveByes":
                 return performNaiveBayesClassification(sessionId, request);
-            case "Tree":
+            case "DecisionTrees":
                 return performDecisionTreeJ48(sessionId, request);
-            case "Logistic regression":
+            case "Logistic":
                 return performLogistic(sessionId, request);
-            case "Random Forest":
-                return randomForest(sessionId, request);
+            case "kNearestNeighbors":
+                return performKNearestNeighbors(sessionId, request);
+            case "RandomForest":
+                return performRandomForest(sessionId, request);
+            case "SupportVectorMachines":
+                return performSupportVectorMachines(sessionId, request);
 
             default:
                 throw new BaseRunTimeException(400, "Specified algorithm " + request.getRegressionType() + " not found.");
@@ -457,6 +513,53 @@ public class MLService {
     }
 
 
+    public RegressionResponse performMultilayerPerceptron(String sessionId, Request request) throws Exception {
+        prepareTrainTestDataset(request, sessionId);
+        Instances trainDataset = cacheManagement.getTrainDataset(sessionId);
+        Attribute classAttribute = trainDataset.attribute(request.getYColumn());
+        trainDataset.setClassIndex(getClassIndex(trainDataset, request.getYColumn()));
+
+        MultilayerPerceptron multilayerPerceptron = new MultilayerPerceptron();
+        multilayerPerceptron.buildClassifier(trainDataset);
+
+        Evaluation evaluation = new Evaluation(trainDataset);
+
+        Instances testDataset = cacheManagement.getTestDataset(sessionId);
+        testDataset.setClassIndex(getClassIndex(testDataset, request.getYColumn()));
+        evaluation.evaluateModel(multilayerPerceptron, testDataset);
+
+        return prepareRegressionResponse(trainDataset, evaluation);
+    }
+
+    public RegressionResponse performSupportVectorRegression(String sessionId, Request request) throws Exception {
+
+/*        AbstractClassifier classifier = ( AbstractClassifier ) Class.forName("weka.classifiers.functions.LibSVM" ).newInstance();
+        classifier.buildClassifier();*/
+        return null;
+    }
+
+    public RegressionResponse performDecisionTrees(String sessionId, Request request) {
+        return null;
+    }
+
+    public RegressionResponse performM5P(String sessionId, Request request) throws Exception {
+        prepareTrainTestDataset(request, sessionId);
+        Instances trainDataset = cacheManagement.getTrainDataset(sessionId);
+        Attribute classAttribute = trainDataset.attribute(request.getYColumn());
+        trainDataset.setClassIndex(getClassIndex(trainDataset, request.getYColumn()));
+
+        M5P m5P = new M5P();
+        m5P.buildClassifier(trainDataset);
+
+        Evaluation evaluation = new Evaluation(trainDataset);
+
+        Instances testDataset = cacheManagement.getTestDataset(sessionId);
+        testDataset.setClassIndex(getClassIndex(testDataset, request.getYColumn()));
+        evaluation.evaluateModel(m5P, testDataset);
+
+        return prepareRegressionResponse(trainDataset, evaluation);
+    }
+
     public RegressionResponse doRegression(String sessionId, Request request) throws Exception {
 
         switch (request.getRegressionType()) {
@@ -464,6 +567,14 @@ public class MLService {
                 return performLinearRegression(sessionId, request);
             case "RandomForest":
                 return performRandomForestRegression(sessionId, request);
+            case "MultilayerPerceptron":
+                return performMultilayerPerceptron(sessionId, request);
+            case "SupportVectorRegression":
+                return performSupportVectorRegression(sessionId, request);
+            case "DecisionTrees":
+                return performDecisionTrees(sessionId, request);
+            case "M5P":
+                return performM5P(sessionId, request);
         }
 
         throw new BaseRunTimeException(404, "Specified algorithm not found.");
@@ -741,15 +852,38 @@ public class MLService {
         }).collect(Collectors.toList());
     }
 
-    private String performApriori(String sessionId) throws Exception {
+    private String performApriori(String sessionId, Request request) throws Exception {
         Instances trainDataset = cacheManagement.getTrainDataset(sessionId);
         Instances testDataset = cacheManagement.getTestDataset(sessionId);
 
+/*
+        Discretize discretize = new Discretize();
+        String[] options = new String[4];
+        options[0] = "-R"; // Range of variables to Discretize
+        options[1] = "first-last"; // All variables will be Discretized
+        options[2] = "-precision"; // Number of bins to create
+        options[3] = "5"; // Here we create 5 bins
+        discretize.setOptions(options);
+        discretize.setInputFormat(trainDataset);
+
+        Instances filterDataset = Filter.useFilter(trainDataset, discretize);
+*/
+
+
+        NominalToBinary nominalToBinary = new NominalToBinary();
+
+        nominalToBinary.setInputFormat(trainDataset);
+        Instances filterDataset = Filter.useFilter(trainDataset, nominalToBinary);
+
+
+
+
         Apriori apriori = new Apriori();
-        apriori.buildAssociations(trainDataset);
+        apriori.setClassIndex(getClassIndex(filterDataset, request.getYColumn()));
+        apriori.buildAssociations(filterDataset);
 
         AssociatorEvaluation evaluation = new AssociatorEvaluation();
-        String evaluationString = evaluation.evaluate(apriori, testDataset);
+        String evaluationString = evaluation.evaluate(apriori, Filter.useFilter(testDataset, nominalToBinary));
 
         return apriori.toString() + "\n Evaluation: \n" + evaluationString;
     }
@@ -772,7 +906,7 @@ public class MLService {
         prepareTrainTestDataset(request, sessionId);
         switch (request.getRegressionType()) {
             case "Apriori":
-                return performApriori(sessionId);
+                return performApriori(sessionId, request);
             case "FPGrowth":
                 return performFPGrowth(sessionId);
 

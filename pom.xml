@@ -118,12 +118,43 @@
 			<type>pom</type>
 		</dependency>
 
+
+		<!-- https://mvnrepository.com/artifact/org.deeplearning4j/deeplearning4j-core -->
+		<dependency>
+			<groupId>org.deeplearning4j</groupId>
+			<artifactId>deeplearning4j-core</artifactId>
+			<version>1.0.0-M2.1</version>
+		</dependency>
+
+		<!-- https://mvnrepository.com/artifact/org.nd4j/nd4j-native-platform -->
+		<dependency>
+			<groupId>org.nd4j</groupId>
+			<artifactId>nd4j-native-platform</artifactId>
+			<version>1.0.0-M2.1</version>
+		</dependency>
+
+		<dependency>
+			<groupId>lilbsvm</groupId>
+			<artifactId>libsvm</artifactId>
+			<version>1.0</version>
+			<systemPath>${project.basedir}/src/main/resources/lib/libsvm.jar</systemPath>
+		</dependency>
+
 	</dependencies>
 
 	<repositories>
 		<repository>
 			<id>cipr.matrix</id>
 			<url>https://mvnrepository.com/artifact/no.uib.cipr.matrix/mtj</url>
+		</repository>
+		<repository>
+			<id>deep.4j</id>
+			<url>https://mvnrepository.com/artifact/org.deeplearning4j/deeplearning4j-core</url>
+		</repository>
+		<repository>
+			<id>nd4j</id>
+			<url>https://mvnrepository.com/artifact/org.nd4j/nd4j-native-platform</url>
+
 		</repository>
 	</repositories>
 
