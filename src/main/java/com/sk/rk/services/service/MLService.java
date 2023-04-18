@@ -784,10 +784,6 @@ public class MLService {
     }
 
 
-
-
-
-
     public Map<String, Object> getDataset(String sessionId) throws Exception {
         Instances dataset = cacheManagement.getDatasource(sessionId);
         int noOfRec = dataset.numInstances();
@@ -856,27 +852,10 @@ public class MLService {
         Instances trainDataset = cacheManagement.getTrainDataset(sessionId);
         Instances testDataset = cacheManagement.getTestDataset(sessionId);
 
-/*
-        Discretize discretize = new Discretize();
-        String[] options = new String[4];
-        options[0] = "-R"; // Range of variables to Discretize
-        options[1] = "first-last"; // All variables will be Discretized
-        options[2] = "-precision"; // Number of bins to create
-        options[3] = "5"; // Here we create 5 bins
-        discretize.setOptions(options);
-        discretize.setInputFormat(trainDataset);
-
-        Instances filterDataset = Filter.useFilter(trainDataset, discretize);
-*/
-
-
         NominalToBinary nominalToBinary = new NominalToBinary();
 
         nominalToBinary.setInputFormat(trainDataset);
         Instances filterDataset = Filter.useFilter(trainDataset, nominalToBinary);
-
-
-
 
         Apriori apriori = new Apriori();
         apriori.setClassIndex(getClassIndex(filterDataset, request.getYColumn()));

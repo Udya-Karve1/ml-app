@@ -4,9 +4,10 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.sk.rk.services.utils.Constants;
 
+import java.io.Serializable;
 import java.util.Date;
 
-public class BaseResponse {
+public class BaseResponse implements Serializable {
 
     @JsonProperty(Constants.TIMESTAMP_FIELD)
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "YYYY-MM-dd'T'HH:mm:ss.SSS'Z'")
