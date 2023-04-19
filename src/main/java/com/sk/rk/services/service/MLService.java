@@ -1006,9 +1006,8 @@ public class MLService {
 
 
 
-    public double[][] getCorrelation(String sessionId, String classAttribute) throws Exception {
+    public CorrelationResponse getCorrelation(String sessionId) throws Exception {
         Instances dataset = cacheManagement.getDatasource(sessionId);
-        dataset.setClassIndex(getClassIndex(dataset, classAttribute));
 
         AttributeSelection filter = new AttributeSelection();
         PrincipalComponents evaluator = new PrincipalComponents();
@@ -1027,6 +1026,28 @@ public class MLService {
             correlationMatrix[i][i] = 1.000;
         }
 
-        return correlationMatrix;
+        Map<String, Object> correlationResponse = new HashMap<>();
+        correlationResponse.put("correlationMatrix", correlationMatrix);
+        correlationResponse.put("attributes", getAttributeNameListFromInstances(dataset));
+        List<String> attributes = getAttributeNameListFromInstances(dataset);
+        List<Correlation> correlationList = new ArrayList<>();
+
+        for(int i=0; i<attributes.size(); i++) {
+            for(int j=0; j<attributes.size(); j++) {
+                correlationList.add(new Correlation(attributes.get(i), attributes.get(j), (correlationMatrix[i][j]*100.00)));
+            }
+        }
+
+        return new CorrelationResponse(correlationList, correlationMatrix, attributes);
+    }
+
+    private List<String> getAttributeNameListFromInstances(Instances instances) {
+        int numAttr = instances.numAttributes();
+        List<String> names = new ArrayList<>();
+        for(int i=0; i<numAttr; i++) {
+            names.add(instances.attribute(i).name());
+        }
+
+        return names;
     }
 }
