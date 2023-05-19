@@ -5,6 +5,7 @@ import com.sk.rk.services.exception.BaseRunTimeException;
 import com.sk.rk.services.model.*;
 import com.sk.rk.services.utils.Constants;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.math3.stat.descriptive.SummaryStatistics;
 import org.apache.logging.log4j.util.Strings;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
@@ -1049,5 +1050,31 @@ public class MLService {
         }
 
         return names;
+
+    }
+
+    public List<StandardDeviationResponse> getStandardDeviation(String sessionId) {
+        Instances dataset = cacheManagement.getDatasource(sessionId);
+
+        SummaryStatistics stats = new SummaryStatistics();
+        List<StandardDeviationResponse> responseList = new ArrayList<>();
+
+        for(int i=0; i<dataset.numAttributes(); i++) {
+            Attribute attribute = dataset.attribute(i);
+            AttributeStats as = dataset.attributeStats(i);
+            double mean = as.numericStats.mean;
+            double stdDev = as.numericStats.stdDev;
+
+            responseList.add(
+                    StandardDeviationResponse.builder()
+                            .attributeName(attribute.name())
+                            .first(new StandardDeviationResponse.StandardDeviation((mean+stdDev),(mean-stdDev)))
+                            .second(new StandardDeviationResponse.StandardDeviation((mean+(stdDev*2)),(mean-(stdDev*2))))
+                            .third(new StandardDeviationResponse.StandardDeviation((mean+(stdDev*3)),(mean-(stdDev*3))))
+                            .build()
+            );
+        }
+
+        return responseList;
     }
 }

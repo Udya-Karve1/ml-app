@@ -6,6 +6,7 @@ import com.sk.rk.services.utils.Constants;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.enums.ParameterStyle;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -62,8 +63,8 @@ public class MLController {
 
 
     @GetMapping("/stats")
-    @Operation(summary = "Get dataset stats", parameters = {
-            @Parameter(name = Constants.USER_SESSION, in = ParameterIn.HEADER)
+    @Operation(summary = "Get dataset stats", description = "End point retuens statistics related to dataset.<ul><li>Count</li><li>Min</li><li>Mean</li><li>Max</li><li>Std Dev</li><li>Sum</li><li>Distinct</li><li>Nominal Count</li><li>Missing</li></ul>", parameters = {
+            @Parameter(name = Constants.USER_SESSION, in = ParameterIn.HEADER, style = ParameterStyle.DEEPOBJECT, example = "Onetwothreeasdfasdf")
     })
     public ResponseEntity<List<AttributeStatistic>> getDatasetStat(
             @RequestHeader(value = Constants.USER_SESSION) String sessionId
@@ -72,7 +73,7 @@ public class MLController {
     }
 
     @GetMapping("/unique-values/{field-name}")
-    @Operation(summary = "Get dataset stats", parameters = {
+    @Operation(summary = "Get dataset stats", description = "End point returns unique values with count.", parameters = {
             @Parameter(name = Constants.USER_SESSION, in = ParameterIn.HEADER)
     })
     public ResponseEntity<ConcurrentMap> getUniqueValue(
@@ -223,5 +224,15 @@ public class MLController {
             @RequestHeader(value = Constants.USER_SESSION) String sessionId
     ) throws Exception {
         return new ResponseEntity<>(mlService.getCorrelation(sessionId), HttpStatus.OK);
+    }
+
+    @GetMapping("/standard-deviation")
+    @Operation(summary = "Get standard deviation", parameters = {
+            @Parameter(name = Constants.USER_SESSION, in = ParameterIn.HEADER)
+    })
+    public ResponseEntity<List<StandardDeviationResponse>> getStandardDeviation(
+            @RequestHeader(value = Constants.USER_SESSION) String sessionId
+    ) throws Exception {
+        return new ResponseEntity<>(mlService.getStandardDeviation(sessionId), HttpStatus.OK);
     }
 }
